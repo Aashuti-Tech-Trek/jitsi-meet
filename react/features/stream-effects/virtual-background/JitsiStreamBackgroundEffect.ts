@@ -18,14 +18,96 @@ export interface IBackgroundEffectOptions {
 }
 
 /**
+ * Describes the interface exposed by the TFLite WASM module used for
+ * person-segmentation inference.
+ *
+ * The module is loaded via {@code createTFLiteModule} / {@code createTFLiteSIMDModule}
+ * (both are Emscripten-generated). Only the subset of the Emscripten runtime
+ * surface that is actually used by this class is declared here.
+ */
+export interface ITFLiteModel {
+    /**
+     * Float32 heap view shared with the WASM linear memory. Used to write
+     * input pixel data and read per-pixel segmentation scores.
+     */
+    HEAPF32: Float32Array;
+
+    /**
+     * Uint8 heap view shared with the WASM linear memory. Used to load the
+     * raw model buffer.
+     */
+    HEAPU8: Uint8Array;
+
+    /**
+     * Returns the byte offset inside WASM memory where the model flatbuffer
+     * should be written before calling {@code _loadModel}.
+     *
+     * @returns {number}
+     */
+    _getModelBufferMemoryOffset(): number;
+
+    /**
+     * Returns the byte offset inside WASM memory where the RGBA input image
+     * data should be written before calling {@code _runInference}.
+     *
+     * @returns {number}
+     */
+    _getInputMemoryOffset(): number;
+
+    /**
+     * Returns the byte offset inside WASM memory from which the per-pixel
+     * float segmentation scores can be read after {@code _runInference}.
+     *
+     * @returns {number}
+     */
+    _getOutputMemoryOffset(): number;
+
+    /**
+     * Initialises the TFLite interpreter with the model whose bytes were
+     * previously written at {@code _getModelBufferMemoryOffset}.
+     *
+     * @param {number} modelSize - Byte length of the model flatbuffer.
+     * @returns {void}
+     */
+    _loadModel(modelSize: number): void;
+
+    /**
+     * Runs a single forward pass of the segmentation model. Input must be
+     * written to {@code _getInputMemoryOffset} beforehand; output is
+     * available at {@code _getOutputMemoryOffset} after the call returns.
+     *
+     * @returns {void}
+     */
+    _runInference(): void;
+}
+
+/**
+ * Minimal interface for a Jitsi local track used by {@link JitsiStreamBackgroundEffect}.
+ * Only the properties accessed inside this class are declared.
+ */
+interface IJitsiLocalTrack {
+    /**
+     * Returns whether this track carries video.
+     *
+     * @returns {boolean}
+     */
+    isVideoTrack(): boolean;
+
+    /**
+     * The video source type (e.g. {@code 'camera'}, {@code 'desktop'}).
+     */
+    videoType: string;
+}
+
+/**
  * Represents a modified MediaStream that adds effects to video background.
  * <tt>JitsiStreamBackgroundEffect</tt> does the processing of the original
  * video stream.
  */
 export default class JitsiStreamBackgroundEffect {
-    _model: any;
+    _model: ITFLiteModel;
     _options: IBackgroundEffectOptions;
-    _stream: any;
+    _stream: MediaStream;
     _segmentationPixelCount: number;
     _inputVideoElement: HTMLVideoElement;
     _maskFrameTimerWorker: Worker;
@@ -38,13 +120,14 @@ export default class JitsiStreamBackgroundEffect {
     _virtualVideo: HTMLVideoElement;
 
     /**
-     * Represents a modified video MediaStream track.
+     * Constructs a new background effect processor.
      *
-     * @class
-     * @param {Object} model - Meet model.
-     * @param {Object} options - Segmentation dimensions.
+     * @param {ITFLiteModel} model - The initialised TFLite WASM module used
+     * for person segmentation inference.
+     * @param {IBackgroundEffectOptions} options - Segmentation canvas dimensions
+     * and virtual-background configuration.
      */
-    constructor(model: Object, options: IBackgroundEffectOptions) {
+    constructor(model: ITFLiteModel, options: IBackgroundEffectOptions) {
         this._options = options;
 
         if (this._options.virtualBackground.backgroundType === VIRTUAL_BACKGROUND_TYPE.IMAGE) {
@@ -68,7 +151,7 @@ export default class JitsiStreamBackgroundEffect {
      * EventHandler onmessage for the maskFrameTimerWorker WebWorker.
      *
      * @private
-     * @param {EventHandler} response - The onmessage EventHandler parameter.
+     * @param {MessageEvent<{id: number}>} response - The onmessage EventHandler parameter.
      * @returns {void}
      */
     _onMaskFrameTimer(response: { data: { id: number; }; }) {
@@ -78,7 +161,8 @@ export default class JitsiStreamBackgroundEffect {
     }
 
     /**
-     * Represents the run post processing.
+     * Composites the segmentation mask, foreground video and background
+     * (blur or image) onto the output canvas.
      *
      * @returns {void}
      */
@@ -92,15 +176,15 @@ export default class JitsiStreamBackgroundEffect {
             return;
         }
 
-        this._outputCanvasElement.height = height;
-        this._outputCanvasElement.width = width;
+        this._outputCanvasElement.height = height as number;
+        this._outputCanvasElement.width = width as number;
         this._outputCanvasCtx.globalCompositeOperation = 'copy';
 
         // Draw segmentation mask.
 
         // Smooth out the edges.
         this._outputCanvasCtx.filter = backgroundType === VIRTUAL_BACKGROUND_TYPE.IMAGE ? 'blur(4px)' : 'blur(8px)';
-        this._outputCanvasCtx?.drawImage( // @ts-ignore
+        this._outputCanvasCtx.drawImage(
             this._segmentationMaskCanvas,
             0,
             0,
@@ -115,15 +199,13 @@ export default class JitsiStreamBackgroundEffect {
         this._outputCanvasCtx.filter = 'none';
 
         // Draw the foreground video.
-        // @ts-ignore
-        this._outputCanvasCtx?.drawImage(this._inputVideoElement, 0, 0);
+        this._outputCanvasCtx.drawImage(this._inputVideoElement, 0, 0);
 
         // Draw the background.
         this._outputCanvasCtx.globalCompositeOperation = 'destination-over';
         if (backgroundType === VIRTUAL_BACKGROUND_TYPE.IMAGE) {
-            this._outputCanvasCtx?.drawImage( // @ts-ignore
-                backgroundType === VIRTUAL_BACKGROUND_TYPE.IMAGE
-                    ? this._virtualImage : this._virtualVideo,
+            this._outputCanvasCtx.drawImage(
+                this._virtualImage,
                 0,
                 0,
                 this._outputCanvasElement.width,
@@ -131,14 +213,13 @@ export default class JitsiStreamBackgroundEffect {
             );
         } else {
             this._outputCanvasCtx.filter = `blur(${this._options.virtualBackground.blurValue}px)`;
-
-            // @ts-ignore
-            this._outputCanvasCtx?.drawImage(this._inputVideoElement, 0, 0);
+            this._outputCanvasCtx.drawImage(this._inputVideoElement, 0, 0);
         }
     }
 
     /**
-     * Represents the run Tensorflow Interference.
+     * Runs a single TFLite segmentation inference pass and writes the
+     * resulting alpha mask into {@code _segmentationMask}.
      *
      * @returns {void}
      */
@@ -174,12 +255,13 @@ export default class JitsiStreamBackgroundEffect {
     }
 
     /**
-     * Represents the resize source process.
+     * Scales the current video frame down to the segmentation-model input
+     * dimensions and writes the normalised RGB values into WASM memory.
      *
      * @returns {void}
      */
     resizeSource() {
-        this._segmentationMaskCtx?.drawImage( // @ts-ignore
+        this._segmentationMaskCtx?.drawImage(
             this._inputVideoElement,
             0,
             0,
@@ -209,11 +291,11 @@ export default class JitsiStreamBackgroundEffect {
     /**
      * Checks if the local track supports this effect.
      *
-     * @param {JitsiLocalTrack} jitsiLocalTrack - Track to apply effect.
-     * @returns {boolean} - Returns true if this effect can run on the specified track
+     * @param {IJitsiLocalTrack} jitsiLocalTrack - Track to apply effect.
+     * @returns {boolean} - Returns true if this effect can run on the specified track,
      * false otherwise.
      */
-    isEnabled(jitsiLocalTrack: any) {
+    isEnabled(jitsiLocalTrack: IJitsiLocalTrack) {
         return jitsiLocalTrack.isVideoTrack() && jitsiLocalTrack.videoType === 'camera';
     }
 
@@ -237,11 +319,11 @@ export default class JitsiStreamBackgroundEffect {
         this._segmentationMaskCanvas.height = this._options.height;
         this._segmentationMaskCtx = this._segmentationMaskCanvas.getContext('2d');
 
-        this._outputCanvasElement.width = parseInt(width, 10);
-        this._outputCanvasElement.height = parseInt(height, 10);
+        this._outputCanvasElement.width = parseInt(String(width), 10);
+        this._outputCanvasElement.height = parseInt(String(height), 10);
         this._outputCanvasCtx = this._outputCanvasElement.getContext('2d');
-        this._inputVideoElement.width = parseInt(width, 10);
-        this._inputVideoElement.height = parseInt(height, 10);
+        this._inputVideoElement.width = parseInt(String(width), 10);
+        this._inputVideoElement.height = parseInt(String(height), 10);
         this._inputVideoElement.autoplay = true;
         this._inputVideoElement.srcObject = this._stream;
         this._inputVideoElement.onloadeddata = () => {
@@ -251,7 +333,7 @@ export default class JitsiStreamBackgroundEffect {
             });
         };
 
-        return this._outputCanvasElement.captureStream(parseInt(frameRate, 10));
+        return this._outputCanvasElement.captureStream(parseInt(String(frameRate), 10));
     }
 
     /**
