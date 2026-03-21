@@ -148,9 +148,21 @@ ReducerRegistry.register<IChatState>('features/chat', (state = DEFAULT_STATE, ac
         };
 
     case DELETE_MESSAGE: {
-        const messages = state.messages.filter(m => m.messageId !== action.messageId);
+        let found = false;
+        const messages = state.messages.map(m => {
+            if (m.messageId === action.messageId) {
+                found = true;
 
-        if (messages.length === state.messages.length) {
+                return {
+                    ...m,
+                    isDeleted: true
+                };
+            }
+
+            return m;
+        });
+
+        if (!found) {
             return state;
         }
 
