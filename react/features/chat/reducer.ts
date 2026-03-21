@@ -9,6 +9,7 @@ import {
     ADD_MESSAGE_REACTION,
     CLEAR_CHAT_STATE,
     CLOSE_CHAT,
+    DELETE_MESSAGE,
     EDIT_MESSAGE,
     NOTIFY_PRIVATE_RECIPIENTS_CHANGED,
     OPEN_CHAT,
@@ -146,6 +147,19 @@ ReducerRegistry.register<IChatState>('features/chat', (state = DEFAULT_STATE, ac
             width: state.width
         };
 
+    case DELETE_MESSAGE: {
+        const messages = state.messages.filter(m => m.messageId !== action.messageId);
+
+        if (messages.length === state.messages.length) {
+            return state;
+        }
+
+        return {
+            ...state,
+            messages
+        };
+    }
+
     case EDIT_MESSAGE: {
         let found = false;
         const newMessage = action.message;
@@ -153,7 +167,10 @@ ReducerRegistry.register<IChatState>('features/chat', (state = DEFAULT_STATE, ac
             if (m.messageId === newMessage.messageId) {
                 found = true;
 
-                return newMessage;
+                return {
+                    ...newMessage,
+                    isEdited: true
+                };
             }
 
             return m;
