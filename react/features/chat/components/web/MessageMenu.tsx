@@ -11,10 +11,11 @@ import Popover from '../../../base/popover/components/Popover.web';
 import Button from '../../../base/ui/components/web/Button';
 import { BUTTON_TYPES } from '../../../base/ui/constants.any';
 import { copyText } from '../../../base/util/copyText.web';
-import { handleLobbyChatInitialized, openChat } from '../../actions.web';
+import { deleteMessage, handleLobbyChatInitialized, openChat } from '../../actions.web';
 import logger from '../../logger';
 
 export interface IProps {
+    canDelete?: boolean;
     className?: string;
     displayName?: string;
     enablePrivateChat: boolean;
@@ -22,6 +23,7 @@ export interface IProps {
     isFromVisitor?: boolean;
     isLobbyMessage: boolean;
     message: string;
+    messageId: string;
     participantId: string;
 }
 
@@ -62,7 +64,17 @@ const useStyles = makeStyles()(theme => {
     };
 });
 
-const MessageMenu = ({ message, participantId, isFromVisitor, isLobbyMessage, enablePrivateChat, displayName, isFileMessage }: IProps) => {
+const MessageMenu = ({
+    canDelete,
+    message,
+    messageId,
+    participantId,
+    isFromVisitor,
+    isLobbyMessage,
+    enablePrivateChat,
+    displayName,
+    isFileMessage
+}: IProps) => {
     const dispatch = useDispatch();
     const { classes, cx } = useStyles();
     const { t } = useTranslation();
@@ -75,7 +87,7 @@ const MessageMenu = ({ message, participantId, isFromVisitor, isLobbyMessage, en
     const participant = useSelector((state: IReduxState) => getParticipantById(state, participantId));
 
     // If no menu items will be shown, don't render the menu button.
-    if (!enablePrivateChat && isFileMessage) {
+    if (!enablePrivateChat && isFileMessage && !canDelete) {
         return null;
     }
 
@@ -135,6 +147,11 @@ const MessageMenu = ({ message, participantId, isFromVisitor, isLobbyMessage, en
         handleClose();
     }, [ message ]);
 
+    const handleDeleteClick = useCallback(() => {
+        dispatch(deleteMessage(messageId));
+        handleClose();
+    }, [ dispatch, messageId ]);
+
     const popoverContent = (
         <div className = { classes.menuPanel }>
             {enablePrivateChat && (
@@ -149,6 +166,14 @@ const MessageMenu = ({ message, participantId, isFromVisitor, isLobbyMessage, en
                     className = { classes.menuItem }
                     onClick = { handleCopyClick }>
                     {t('Copy')}
+                </div>
+            )}
+            {canDelete && (
+                <div
+                    className = { classes.menuItem }
+                    onClick = { handleDeleteClick }
+                    style = {{ color: '#e05c5c' }}>
+                    {t('chat.deleteMessage')}
                 </div>
             )}
         </div>
