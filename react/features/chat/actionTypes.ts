@@ -44,6 +44,16 @@ export const CLEAR_CHAT_STATE = 'CLEAR_CHAT_STATE';
 export const CLOSE_CHAT = 'CLOSE_CHAT';
 
 /**
+ * The type of the action which signals to delete a chat message.
+ *
+ * {
+ *     type: DELETE_MESSAGE,
+ *     messageId: string
+ * }
+ */
+export const DELETE_MESSAGE = 'DELETE_MESSAGE';
+
+/**
  * The type of the action which signals to edit chat message.
  *
  * {
