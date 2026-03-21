@@ -7,6 +7,7 @@ export interface IMessage {
     displayName: string;
     error?: Object;
     fileMetadata?: IFileMetadata;
+    isDeleted?: boolean;
     isEdited?: boolean;
     isFromGuest?: boolean;
     isFromVisitor?: boolean;
