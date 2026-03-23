@@ -1,7 +1,12 @@
 import PersistenceRegistry from '../base/redux/PersistenceRegistry';
 import ReducerRegistry from '../base/redux/ReducerRegistry';
 
-import { BACKGROUND_ENABLED, SET_VIRTUAL_BACKGROUND } from './actionTypes';
+import {
+    BACKGROUND_ENABLED,
+    SET_VIRTUAL_BACKGROUND,
+    SET_VIRTUAL_BACKGROUND_STATS,
+    SET_VIRTUAL_BACKGROUND_STATS_ENABLED
+} from './actionTypes';
 
 const STORE_NAME = 'features/virtual-background';
 
@@ -10,6 +15,23 @@ export interface IVirtualBackground {
     backgroundType?: string;
     blurValue?: number;
     selectedThumbnail?: string;
+
+    /**
+     * Real-time performance statistics for the background effect.
+     */
+    stats?: {
+        fps: number;
+        frameTime: number;
+        inferenceTime: number;
+        postProcessingTime: number;
+        resolution: string;
+        isUsingRVFC: boolean;
+    };
+
+    /**
+     * Feature flag to toggle the performance statistics overlay.
+     */
+    statsEnabled?: boolean;
     virtualSource?: string;
 }
 
@@ -46,6 +68,20 @@ ReducerRegistry.register<IVirtualBackground>(STORE_NAME, (state = {}, action): I
         return {
             ...state,
             backgroundEffectEnabled
+        };
+    }
+
+    case SET_VIRTUAL_BACKGROUND_STATS: {
+        return {
+            ...state,
+            stats: action.stats
+        };
+    }
+
+    case SET_VIRTUAL_BACKGROUND_STATS_ENABLED: {
+        return {
+            ...state,
+            statsEnabled: action.statsEnabled
         };
     }
     }

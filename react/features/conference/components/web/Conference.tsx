@@ -39,6 +39,8 @@ import VisitorsQueue from '../../../visitors/components/web/VisitorsQueue';
 import { showVisitorsQueue } from '../../../visitors/functions';
 import { init } from '../../actions.web';
 import { maybeShowSuboptimalExperienceNotification } from '../../functions.web';
+import VirtualBackgroundStats from '../../../virtual-background/components/VirtualBackgroundStats';
+import { setVirtualBackgroundStatsEnabled } from '../../../virtual-background/actions';
 import {
     AbstractConference,
     type AbstractProps,
@@ -326,6 +328,7 @@ class Conference extends AbstractConference<IProps, any> {
                 <ParticipantsPane />
                 <CustomPanel />
                 <ReactionAnimations />
+                <VirtualBackgroundStats />
             </div>
         );
     }
@@ -444,6 +447,12 @@ class Conference extends AbstractConference<IProps, any> {
         dispatch(init(!shouldShowPrejoin(this.props)));
 
         maybeShowSuboptimalExperienceNotification(dispatch, t);
+
+        const urlParams = new URLSearchParams(window.location.search);
+
+        if (urlParams.get('vb_stats') === 'true') {
+            dispatch(setVirtualBackgroundStatsEnabled(true));
+        }
     }
 }
 

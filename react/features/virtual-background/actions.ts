@@ -1,7 +1,12 @@
 import { IStore } from '../app/types';
 import { createVirtualBackgroundEffect } from '../stream-effects/virtual-background';
 
-import { BACKGROUND_ENABLED, SET_VIRTUAL_BACKGROUND } from './actionTypes';
+import {
+    BACKGROUND_ENABLED,
+    SET_VIRTUAL_BACKGROUND,
+    SET_VIRTUAL_BACKGROUND_STATS,
+    SET_VIRTUAL_BACKGROUND_STATS_ENABLED
+} from './actionTypes';
 import { VIRTUAL_BACKGROUND_TYPE } from './constants';
 import logger from './logger';
 import { IVirtualBackground } from './reducer';
@@ -101,5 +106,40 @@ export function toggleBlurredBackgroundEffect(videoTrack: any, blurType: 'slight
                 selectedThumbnail: blurType
             }, videoTrack));
         }
+    };
+}
+
+/**
+ * Sets the virtual background performance statistics in the Redux store.
+ * These stats are used by the VirtualBackgroundStats overlay to show real-time
+ * performance metrics (inference time, FPS, etc.) to developers.
+ *
+ * @param {Object} stats - The performance statistics.
+ * @returns {{
+ *     type: SET_VIRTUAL_BACKGROUND_STATS,
+ *     stats: Object
+ * }}
+ */
+export function setVirtualBackgroundStats(stats: Object) {
+    return {
+        type: SET_VIRTUAL_BACKGROUND_STATS,
+        stats
+    };
+}
+
+/**
+ * Enables or disables the virtual background performance statistics overlay.
+ * This is typically triggered by the 'vb_stats=true' URL parameter.
+ *
+ * @param {boolean} statsEnabled - Whether the statistics overlay is enabled.
+ * @returns {{
+ *     type: SET_VIRTUAL_BACKGROUND_STATS_ENABLED,
+ *     statsEnabled: boolean
+ * }}
+ */
+export function setVirtualBackgroundStatsEnabled(statsEnabled: boolean) {
+    return {
+        type: SET_VIRTUAL_BACKGROUND_STATS_ENABLED,
+        statsEnabled
     };
 }

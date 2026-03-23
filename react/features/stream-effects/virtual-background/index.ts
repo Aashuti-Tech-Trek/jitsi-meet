@@ -1,6 +1,6 @@
 /* eslint-disable lines-around-comment */
 import { IStore } from '../../app/types';
-import { showWarningNotification } from '../../notifications/actions';
+import { setVirtualBackgroundStats } from '../../virtual-background/actions';
 import { NOTIFICATION_TIMEOUT_TYPE } from '../../notifications/constants';
 import { timeout } from '../../virtual-background/functions';
 import logger from '../../virtual-background/logger';
@@ -99,7 +99,10 @@ export async function createVirtualBackgroundEffect(virtualBackground: IBackgrou
 
     const options = {
         ...segmentationDimensions.modelLandscape,
-        virtualBackground
+        virtualBackground,
+        onStatsUpdate: (stats: Object) => {
+            dispatch?.(setVirtualBackgroundStats(stats));
+        }
     };
 
     return new JitsiStreamBackgroundEffect(tflite, options);

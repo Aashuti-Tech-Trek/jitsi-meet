@@ -15,6 +15,7 @@ export interface IBackgroundEffectOptions {
         virtualSource?: string;
     };
     width: number;
+    onStatsUpdate?: (stats: Object) => void;
 }
 
 /**
@@ -36,6 +37,10 @@ export default class JitsiStreamBackgroundEffect {
     _segmentationMaskCanvas: HTMLCanvasElement;
     _virtualImage: HTMLImageElement;
     _virtualVideo: HTMLVideoElement;
+    _fps: number = 0;
+    _frameCount: number = 0;
+    _fpsUpdateTime: number = performance.now();
+    _lastFrameTime: number = 0;
 
     /**
      * Represents a modified video MediaStream track.
@@ -163,9 +168,46 @@ export default class JitsiStreamBackgroundEffect {
      * @returns {void}
      */
     _renderMask() {
+        // 1. Calculate the actual frame duration and cumulative FPS.
+        const now = performance.now();
+        const frameTime = this._lastFrameTime ? now - this._lastFrameTime : 0;
+
+        this._lastFrameTime = now;
+        this._frameCount++;
+
+        // Update FPS every second to provide a readable, stable number.
+        if (now - this._fpsUpdateTime > 1000) {
+            this._fps = Math.round((this._frameCount * 1000) / (now - this._fpsUpdateTime));
+            this._frameCount = 0;
+            this._fpsUpdateTime = now;
+        }
+
+        // 2. Measure the latency of different stages in the pipeline.
+        const t0 = performance.now();
+
         this.resizeSource();
+
+        const t1 = performance.now();
+
         this.runInference();
+
+        const t2 = performance.now();
+
         this.runPostProcessing();
+
+        const t3 = performance.now();
+
+        // 3. Report the metrics to the consumer (Redux state in our case).
+        if (this._options.onStatsUpdate) {
+            this._options.onStatsUpdate({
+                fps: this._fps,
+                frameTime: Math.round(frameTime),
+                inferenceTime: Math.round(t2 - t1),
+                postProcessingTime: Math.round(t3 - t2),
+                isUsingRVFC: false, // Cleaner base doesn't have RVFC yet
+                resolution: `${this._inputVideoElement.width}x${this._inputVideoElement.height}`
+            });
+        }
 
         this._maskFrameTimerWorker.postMessage({
             id: SET_TIMEOUT,
