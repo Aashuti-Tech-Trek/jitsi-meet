@@ -5,7 +5,7 @@ import { NOTIFICATION_TIMEOUT_TYPE } from '../../notifications/constants';
 import { timeout } from '../../virtual-background/functions';
 import logger from '../../virtual-background/logger';
 
-import JitsiStreamBackgroundEffect, { IBackgroundEffectOptions } from './JitsiStreamBackgroundEffect';
+import JitsiStreamBackgroundEffect, { IBackgroundEffectOptions, ITFLiteModel } from './JitsiStreamBackgroundEffect';
 // @ts-ignore
 import createTFLiteModule from './vendor/tflite/tflite';
 // @ts-ignore
@@ -16,8 +16,8 @@ const models = {
 /* eslint-enable lines-around-comment */
 
 let modelBuffer: ArrayBuffer;
-let tflite: any;
-let wasmCheck;
+let tflite: ITFLiteModel;
+let wasmCheck: { feature?: { simd?: boolean; }; };
 let isWasmDisabled = false;
 
 const segmentationDimensions = {
