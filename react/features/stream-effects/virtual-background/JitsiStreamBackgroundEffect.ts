@@ -29,6 +29,7 @@ export default class JitsiStreamBackgroundEffect {
     _segmentationPixelCount: number;
     _inputVideoElement: HTMLVideoElement;
     _maskFrameTimerWorker: Worker;
+    _rvfcId?: number;
     _outputCanvasElement: HTMLCanvasElement;
     _outputCanvasCtx: CanvasRenderingContext2D | null;
     _segmentationMaskCtx: CanvasRenderingContext2D | null;
@@ -57,6 +58,7 @@ export default class JitsiStreamBackgroundEffect {
 
         // Bind event handler so it is only bound once for every instance.
         this._onMaskFrameTimer = this._onMaskFrameTimer.bind(this);
+        this._renderMask = this._renderMask.bind(this);
 
         // Workaround for FF issue https://bugzilla.mozilla.org/show_bug.cgi?id=1388974
         this._outputCanvasElement = document.createElement('canvas');
@@ -167,10 +169,14 @@ export default class JitsiStreamBackgroundEffect {
         this.runInference();
         this.runPostProcessing();
 
-        this._maskFrameTimerWorker.postMessage({
-            id: SET_TIMEOUT,
-            timeMs: 1000 / 30
-        });
+        if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+            this._rvfcId = (this._inputVideoElement as any).requestVideoFrameCallback(this._renderMask);
+        } else {
+            this._maskFrameTimerWorker.postMessage({
+                id: SET_TIMEOUT,
+                timeMs: 1000 / 30
+            });
+        }
     }
 
     /**
@@ -225,8 +231,10 @@ export default class JitsiStreamBackgroundEffect {
      */
     startEffect(stream: MediaStream) {
         this._stream = stream;
-        this._maskFrameTimerWorker = new Worker(timerWorkerScript, { name: 'Blur effect worker' });
-        this._maskFrameTimerWorker.onmessage = this._onMaskFrameTimer;
+        if (!('requestVideoFrameCallback' in HTMLVideoElement.prototype)) {
+            this._maskFrameTimerWorker = new Worker(timerWorkerScript, { name: 'Blur effect worker' });
+            this._maskFrameTimerWorker.onmessage = this._onMaskFrameTimer;
+        }
         const firstVideoTrack = this._stream.getVideoTracks()[0];
         const { height, frameRate, width }
             = firstVideoTrack.getSettings ? firstVideoTrack.getSettings() : firstVideoTrack.getConstraints();
@@ -245,10 +253,14 @@ export default class JitsiStreamBackgroundEffect {
         this._inputVideoElement.autoplay = true;
         this._inputVideoElement.srcObject = this._stream;
         this._inputVideoElement.onloadeddata = () => {
-            this._maskFrameTimerWorker.postMessage({
-                id: SET_TIMEOUT,
-                timeMs: 1000 / 30
-            });
+            if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+                this._rvfcId = (this._inputVideoElement as any).requestVideoFrameCallback(this._renderMask);
+            } else {
+                this._maskFrameTimerWorker.postMessage({
+                    id: SET_TIMEOUT,
+                    timeMs: 1000 / 30
+                });
+            }
         };
 
         return this._outputCanvasElement.captureStream(parseInt(frameRate, 10));
@@ -260,10 +272,14 @@ export default class JitsiStreamBackgroundEffect {
      * @returns {void}
      */
     stopEffect() {
-        this._maskFrameTimerWorker.postMessage({
-            id: CLEAR_TIMEOUT
-        });
+        if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+            (this._inputVideoElement as any).cancelVideoFrameCallback(this._rvfcId);
+        } else {
+            this._maskFrameTimerWorker.postMessage({
+                id: CLEAR_TIMEOUT
+            });
 
-        this._maskFrameTimerWorker.terminate();
+            this._maskFrameTimerWorker.terminate();
+        }
     }
 }
