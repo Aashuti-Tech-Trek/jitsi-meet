@@ -5,7 +5,7 @@ import { makeStyles } from 'tss-react/mui';
 
 import { IReduxState } from '../../../app/types';
 import { translate } from '../../../base/i18n/functions';
-import { getParticipantById, getParticipantDisplayName, isPrivateChatEnabled } from '../../../base/participants/functions';
+import { getParticipantById, getParticipantDisplayName, isLocalParticipantModerator, isPrivateChatEnabled } from '../../../base/participants/functions';
 import Popover from '../../../base/popover/components/Popover.web';
 import Message from '../../../base/react/components/web/Message';
 import { MESSAGE_TYPE_LOCAL } from '../../constants';
@@ -17,6 +17,7 @@ import MessageMenu from './MessageMenu';
 import ReactButton from './ReactButton';
 
 interface IProps extends IChatMessageProps {
+    canDelete?: boolean;
     className?: string;
     enablePrivateChat?: boolean;
     shouldDisplayMenuOnRight?: boolean;
@@ -202,11 +203,23 @@ const useStyles = makeStyles()((theme: Theme) => {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap'
+        },
+        deletedMessage: {
+            ...theme.typography.labelRegular,
+            color: theme.palette.chatTimestamp,
+            fontStyle: 'italic'
+        },
+        editedIndicator: {
+            ...theme.typography.labelRegular,
+            color: theme.palette.chatTimestamp,
+            marginLeft: theme.spacing(1),
+            flexShrink: 0
         }
     };
 });
 
 const ChatMessage = ({
+    canDelete,
     className = '',
     message,
     state,
@@ -357,13 +370,15 @@ const ChatMessage = ({
             <div className = { classes.sideBySideContainer }>
                 {!shouldDisplayMenuOnRight && (
                     <div className = { classes.optionsButtonContainer }>
-                        {isHovered && <MessageMenu
+                        {isHovered && !message.isDeleted && <MessageMenu
+                            canDelete = { canDelete }
                             displayName = { message.displayName }
                             enablePrivateChat = { Boolean(enablePrivateChat) }
                             isFileMessage = { isFileMessage(message) }
                             isFromVisitor = { message.isFromVisitor }
                             isLobbyMessage = { message.lobbyChat }
                             message = { message.message }
+                            messageId = { message.messageId }
                             participantId = { message.participantId } />}
                     </div>
                 )}
@@ -380,7 +395,11 @@ const ChatMessage = ({
                         <div className = { cx('messagecontent', classes.messageContent) }>
                             {showDisplayName && _renderDisplayName()}
                             <div className = { cx('usermessage', classes.userMessage) }>
-                                {isFileMessage(message) ? (
+                                {message.isDeleted ? (
+                                    <span className = { classes.deletedMessage }>
+                                        {t('chat.messageDeleted')}
+                                    </span>
+                                ) : isFileMessage(message) ? (
                                     <FileMessage
                                         message = { message }
                                         screenReaderHelpText = { message.messageType === MESSAGE_TYPE_LOCAL
@@ -398,17 +417,24 @@ const ChatMessage = ({
                                             }) }
                                         text = { getMessageText(message) } />
                                 )}
-                                {(message.privateMessage || (message.lobbyChat && !knocking))
+                                {!message.isDeleted && (message.privateMessage || (message.lobbyChat && !knocking))
                                     && _renderPrivateNotice()}
                                 <div className = { classes.chatMessageFooter }>
                                     <div className = { classes.chatMessageFooterLeft }>
-                                        {message.reactions && message.reactions.size > 0 && (
+                                        {!message.isDeleted && message.reactions && message.reactions.size > 0 && (
                                             <>
                                                 {renderReactions}
                                             </>
                                         )}
                                     </div>
-                                    {_renderTimestamp()}
+                                    <div style = {{ display: 'flex', alignItems: 'center' }}>
+                                        {message.isEdited && !message.isDeleted && (
+                                            <span className = { classes.editedIndicator }>
+                                                {t('chat.edited')}
+                                            </span>
+                                        )}
+                                        {_renderTimestamp()}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -416,7 +442,7 @@ const ChatMessage = ({
                 </div>
                 {shouldDisplayMenuOnRight && (
                     <div className = { classes.sideBySideContainer }>
-                        {!message.privateMessage && !message.lobbyChat
+                        {!message.isDeleted && !message.privateMessage && !message.lobbyChat
                         && !message.isReaction && <div>
                             <div className = { classes.optionsButtonContainer }>
                                 {isHovered && <ReactButton
@@ -426,13 +452,15 @@ const ChatMessage = ({
                         </div>}
                         <div>
                             <div className = { classes.optionsButtonContainer }>
-                                {isHovered && <MessageMenu
+                                {isHovered && !message.isDeleted && <MessageMenu
+                                    canDelete = { canDelete }
                                     displayName = { message.displayName }
                                     enablePrivateChat = { Boolean(enablePrivateChat) }
                                     isFileMessage = { isFileMessage(message) }
                                     isFromVisitor = { message.isFromVisitor }
                                     isLobbyMessage = { message.lobbyChat }
                                     message = { message.message }
+                                    messageId = { message.messageId }
                                     participantId = { message.participantId } />}
                             </div>
                         </div>
@@ -467,7 +495,13 @@ function _mapStateToProps(state: IReduxState, { message }: IProps) {
     // left side.
     const shouldDisplayMenuOnRight = message.messageType !== MESSAGE_TYPE_LOCAL;
 
+    // A message can be deleted by its author or by a moderator.
+    const isOwnMessage = message.messageType === MESSAGE_TYPE_LOCAL;
+    const isModerator = isLocalParticipantModerator(state);
+    const canDelete = isOwnMessage || isModerator;
+
     return {
+        canDelete,
         shouldDisplayMenuOnRight,
         enablePrivateChat,
         knocking,

@@ -141,6 +141,9 @@
             "titleWithPollsAndCC": "Enter a nickname to use chat, polls and closed captions",
             "titleWithPollsAndCCAndFileSharing": "Enter a nickname to use chat, polls, closed captions and files"
         },
+        "deleteMessage": "Delete message",
+        "edited": "(edited)",
+        "messageDeleted": "This message was deleted.",
         "noMessagesMessage": "There are no messages in the meeting yet. Start a conversation here!",
         "privateNotice": "Private message to {{recipient}}",
         "sendButton": "Send",
